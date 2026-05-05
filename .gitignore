@@ -1,0 +1,41 @@
+# API keys - NEVER commit these
+.env
+*.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Results - decide if you want to commit these or not
+# By default we commit results so Wannes can see them
+# Comment the next line out if you DO want to commit results
+# results/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
