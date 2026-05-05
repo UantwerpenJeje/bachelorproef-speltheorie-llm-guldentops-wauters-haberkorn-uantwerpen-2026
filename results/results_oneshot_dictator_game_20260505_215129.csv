@@ -1,0 +1,4 @@
+model,game,framing,run_id,amount_shared,amount_kept,payoff_dictator,payoff_receiver,raw_response,temperature
+claude-haiku,dictator_game,neutral,1,50,50,50,50,50,0.7
+claude-haiku,dictator_game,neutral,2,50,50,50,50,50,0.7
+claude-haiku,dictator_game,neutral,3,50,50,50,50,50,0.7

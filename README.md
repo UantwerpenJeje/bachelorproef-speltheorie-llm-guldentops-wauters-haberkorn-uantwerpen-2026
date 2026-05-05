@@ -12,12 +12,20 @@ Deze code voert geautomatiseerde experimenten uit waarin verschillende Large Lan
 1. de rationele oplossing volgens de speltheorie (Nash-evenwicht)
 2. empirisch waargenomen menselijk gedrag uit de literatuur
 
-### Onderzochte spellen (iteratief)
+### Onderzochte spellen
+
+**Iteratief** (LLM vs vaste strategie — `run_experiment.py`)
 - **Prisoner's Dilemma** (50 rondes per run)
 - **Chicken Game** (20 rondes per run)
 - **Stag Hunt** (20 rondes per run)
 
-> Eenmalige spellen (Dictator Game, Ultimatum Game, Beauty Contest) komen in een aparte module.
+**Eenmalig / one-shot** (`run_oneshot.py`)
+- **Dictator Game** — LLM verdeelt 100€; Nash = 0€, mensen ≈ 28€
+- **Ultimatum Game** — proposer biedt verdeling aan, responder aanvaardt/verwerpt; Nash = 1€/accept, mensen ≈ 40–50%
+- **Beauty Contest** — kies een getal 0–100; winnaar = dichtst bij 2/3 × gemiddelde; 5 rondes met feedback; Nash = 0
+
+**LLM vs LLM** (`run_llm_vs_llm.py`)
+- Alle iteratieve spellen, maar de tegenstander is een tweede LLM in plaats van een vaste strategie
 
 ### Onderzochte modellen
 | Model | Provider | LiteLLM-string |
@@ -49,12 +57,17 @@ Deze code voert geautomatiseerde experimenten uit waarin verschillende Large Lan
 ├── config.py                  ← centrale configuratie (modellen, runs, etc.)
 ├── llm_client.py              ← uniforme wrapper rond alle LLM-API's (LiteLLM)
 ├── strategies.py              ← AC, AD, TfT, Random
-├── prompts.py                 ← prompt-templates per spel × framing
+├── prompts.py                 ← prompt-templates per spel × framing + parse-functies
 ├── games/
-│   ├── prisoners_dilemma.py   ← payoff-matrix
-│   ├── chicken_game.py        ← payoff-matrix
-│   └── stag_hunt.py           ← payoff-matrix
-├── run_experiment.py          ← hoofdscript dat alles orkestreert
+│   ├── prisoners_dilemma.py   ← payoff-matrix (iteratief)
+│   ├── chicken_game.py        ← payoff-matrix (iteratief)
+│   ├── stag_hunt.py           ← payoff-matrix (iteratief)
+│   ├── dictator_game.py       ← payoff-functie (one-shot)
+│   ├── ultimatum_game.py      ← payoff-functie (one-shot, 2 fasen)
+│   └── beauty_contest.py      ← hulpfuncties (iteratief met feedback)
+├── run_experiment.py          ← LLM vs vaste strategie (iteratief)
+├── run_llm_vs_llm.py          ← LLM vs LLM (iteratief)
+├── run_oneshot.py             ← Dictator, Ultimatum, Beauty Contest
 └── results/                   ← gegenereerde CSV-bestanden
 ```
 
@@ -104,24 +117,60 @@ python run_experiment.py \
     --runs 2
 ```
 
-### Het volledige experiment
+### Het volledige iteratieve experiment
 ```bash
 python run_experiment.py
 ```
 Dit voert ~10 000 LLM-calls uit. Reken op enkele uren afhankelijk van je rate limits.
 
-### Output
-Elke run schrijft een tijdgestempeld CSV-bestand in `results/`:
-```
-results/results_YYYYMMDD_HHMMSS.csv
+### LLM vs LLM (iteratief)
+```bash
+# Één specifiek paar (bv. VS vs China)
+python run_llm_vs_llm.py --player1 gpt-4o-mini --player2 deepseek-chat
+
+# Alle paren uit een lijst van modellen
+python run_llm_vs_llm.py --models gpt-4o-mini deepseek-chat claude-haiku
+
+# Dry-run
+python run_llm_vs_llm.py --player1 gpt-4o-mini --player2 deepseek-chat --dry-run
 ```
 
-Kolommen:
+### One-shot spellen (Dictator, Ultimatum, Beauty Contest)
+```bash
+# Alle drie de one-shot spellen
+python run_oneshot.py --models gpt-4o-mini deepseek-chat
+
+# Enkel het Dictator Game
+python run_oneshot.py --models gpt-4o-mini --games dictator_game
+
+# Ultimatum met een aparte responder
+python run_oneshot.py --models gpt-4o-mini --games ultimatum_game \
+    --responder-model deepseek-chat
+
+# Beauty Contest met meer spelers en meer rondes
+python run_oneshot.py --models gpt-4o-mini --games beauty_contest \
+    --num-players 7 --num-rounds 8
+
+# Dry-run (geen API-calls)
+python run_oneshot.py --models gpt-4o-mini --dry-run
+```
+
+### Output
+Elke run schrijft tijdgestempelde CSV-bestanden in `results/`:
+```
+results/results_YYYYMMDD_HHMMSS.csv              ← iteratief (LLM vs strategie)
+results/results_llmvsllm_YYYYMMDD_HHMMSS.csv     ← LLM vs LLM
+results/results_oneshot_dictator_YYYYMMDD_HHMMSS.csv
+results/results_oneshot_ultimatum_YYYYMMDD_HHMMSS.csv
+results/results_oneshot_beauty_YYYYMMDD_HHMMSS.csv
+```
+
+**Kolommen — iteratief (`run_experiment.py`):**
 | kolom | omschrijving |
 |-------|--------------|
 | `model` | naam van het LLM |
 | `game` | spelnaam |
-| `opponent_strategy` | tegenstanderstrategie |
+| `opponent_strategy` | tegenstanderstrategie (AC / AD / TfT / Random / LLM) |
 | `framing` | `neutral` of `competitive` |
 | `run_id` | nummer van de run binnen deze conditie |
 | `round` | rondenummer |
@@ -131,6 +180,17 @@ Kolommen:
 | `opponent_payoff` | payoff voor de tegenstander |
 | `raw_response` | de volledige tekst van het LLM (voor debugging) |
 | `temperature` | gebruikte temperatuur (0.7) |
+
+Extra kolommen in `run_llm_vs_llm.py`: `opponent_model`, `perspective` (player1/player2).
+
+**Kolommen — Dictator Game:**
+`model`, `game`, `framing`, `run_id`, `amount_shared`, `amount_kept`, `payoff_dictator`, `payoff_receiver`, `raw_response`, `temperature`
+
+**Kolommen — Ultimatum Game:**
+`proposer_model`, `responder_model`, `game`, `framing`, `run_id`, `offer`, `response`, `payoff_proposer`, `payoff_responder`, `raw_proposer`, `raw_responder`, `temperature`
+
+**Kolommen — Beauty Contest:**
+`model`, `game`, `framing`, `run_id`, `round`, `llm_number`, `random_numbers`, `mean`, `target`, `winner_number`, `llm_won`, `payoff`, `raw_response`, `temperature`, `num_players`, `num_rounds`
 
 ## Methodologische keuzes
 

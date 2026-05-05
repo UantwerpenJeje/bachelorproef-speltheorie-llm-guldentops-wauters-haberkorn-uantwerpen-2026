@@ -1,0 +1,4 @@
+proposer_model,responder_model,game,framing,run_id,offer,response,payoff_proposer,payoff_responder,raw_proposer,raw_responder,temperature
+claude-haiku,claude-haiku,ultimatum_game,neutral,1,40,ACCEPT,60,40,40,ACCEPT,0.7
+claude-haiku,claude-haiku,ultimatum_game,neutral,2,40,ACCEPT,60,40,40,ACCEPT,0.7
+claude-haiku,claude-haiku,ultimatum_game,neutral,3,40,ACCEPT,60,40,40,ACCEPT,0.7

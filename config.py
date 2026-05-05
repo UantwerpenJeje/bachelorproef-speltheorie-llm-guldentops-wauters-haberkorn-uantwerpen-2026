@@ -35,7 +35,7 @@ TEMPERATURE = 0.7
 
 # Aantal runs per conditie (1 conditie = 1 model x 1 spel x 1 tegenstander x 1 framing)
 RUNS_ITERATIVE = 10        # voor PD, Chicken, Stag Hunt
-RUNS_ONE_SHOT  = 30        # voor Dictator, Ultimatum, Beauty Contest (later)
+RUNS_ONE_SHOT  = 30        # voor Dictator, Ultimatum, Beauty Contest
 
 # Aantal rondes binnen één run
 ROUNDS = {
@@ -47,6 +47,10 @@ ROUNDS = {
 # Tegenstanderstrategieën (geïmplementeerd in strategies.py)
 OPPONENT_STRATEGIES = ["AC", "AD", "TfT", "Random"]
 # LLM-vs-LLM wordt apart afgehandeld in run_experiment.py
+
+# Beauty Contest parameters
+BEAUTY_CONTEST_PLAYERS = 5   # totaal aantal spelers (1 LLM + 4 willekeurige)
+BEAUTY_CONTEST_ROUNDS  = 5   # aantal rondes per run
 
 # Framings (geïmplementeerd in prompts.py)
 FRAMINGS = ["neutral", "competitive"]
