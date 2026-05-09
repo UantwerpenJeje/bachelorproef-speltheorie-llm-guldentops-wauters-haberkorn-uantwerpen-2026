@@ -12,7 +12,7 @@ Alle constanten staan hier zodat we ze niet hoeven te zoeken in de code.
 # Modelnamen volgen de LiteLLM-conventie:
 #   - OpenAI:    "gpt-4o-mini"
 #   - Anthropic: "anthropic/claude-haiku-4-5"
-#   - Gemini:    "gemini/gemini-2.0-flash"
+#   - Gemini:    "gemini/gemini-2.5-flash"
 #   - DeepSeek:  "deepseek/deepseek-chat"
 #   - Groq:      "groq/llama-3.1-8b-instant"
 #   - xAI:       "xai/grok-3-mini-beta"
@@ -20,7 +20,7 @@ Alle constanten staan hier zodat we ze niet hoeven te zoeken in de code.
 MODELS = {
     "gpt-4o-mini":      "gpt-4o-mini",
     "claude-haiku":     "anthropic/claude-haiku-4-5",
-    "gemini-flash":     "gemini/gemini-2.0-flash",
+    "gemini-flash":     "gemini/gemini-2.5-flash",
     "deepseek-chat":    "deepseek/deepseek-chat",
     "llama-3.1-8b":     "groq/llama-3.1-8b-instant",
     # TODO: verifieer de exacte LiteLLM-string voor xAI Grok vóór productierun
