@@ -183,6 +183,34 @@ Extra kolommen in `run_llm_vs_llm.py`: `opponent_model`, `perspective` (player1/
 **Kolommen — Beauty Contest:**
 `model`, `game`, `framing`, `run_id`, `round`, `llm_number`, `random_numbers`, `mean`, `target`, `winner_number`, `llm_won`, `payoff`, `raw_response`, `temperature`, `num_players`, `num_rounds`
 
+## Resultaten en grafieken
+
+Voer `python analyze_results.py` uit om alle analyses en grafieken te genereren. Alle PNG-bestanden worden opgeslagen in `results/`.
+
+### plot1_coop_per_game.png — Coöperatie-rate per model per spel
+Toont het percentage rondes waarin elk LLM de coöperatieve actie kiest, gemiddeld over alle tegenstanders en framings. De rode stippellijn is het Nash-evenwicht, de groene stippellijn het menselijk gemiddelde. Hoe hoger de balk, hoe coöperatiever het model.
+
+### plot2_coop_temperature.png — Temperatuurvergelijking T=0 vs T=1
+Vergelijkt de coöperatie-rate bij T=0 (deterministisch, 1 ronde) en T=1 (variabel, 10 rondes) per model per spel. Blauwe balken zijn T=0, oranje balken T=1. Een groot verschil tussen T=0 en T=1 betekent dat temperatuur het gedrag sterk beïnvloedt.
+
+### plot3_beauty_contest.png — Beauty Contest: gekozen getal per ronde
+Links (T=0): barplot van het gekozen getal per model in de enkele ronde. Rechts (T=1): lijnplot van het gemiddeld gekozen getal per ronde over 20 rondes. De stippellijnen tonen level-k denkniveaus (level 0 = 50, level 1 = 33, level 2 = 22, Nash = 0) en het menselijk gemiddelde (36). Convergentie naar 0 over de rondes wijst op strategisch leren.
+
+### plot4_dictator_game.png — Dictator Game: gemiddeld afgestaan bedrag
+Barplot van hoeveel elk model weggeeft van de 100 euro. Nash-evenwicht is 0 euro (rode lijn), menselijk gemiddelde is 28 euro (groene lijn). Modellen die boven de groene lijn zitten zijn genereuzer dan mensen.
+
+### plot5_framing_effect.png — Framing-effect: neutral vs competitive
+Toont het verschil in coöperatie-rate tussen neutrale en competitieve framing per model per spel. Groene balken = hogere coöperatie bij neutrale framing. Rode balken = hogere coöperatie bij competitieve framing. Een grote balk betekent dat het model gevoelig is voor hoe de situatie wordt beschreven.
+
+### plot6_llmvsllm_heatmaps.png — LLM vs LLM coöperatie-heatmaps
+Heatmaps per spel en temperatuur. Rijen = het model, kolommen = de tegenstander. De kleur toont de coöperatie-rate: donkergroen = altijd coöpereren, donkerrood = altijd defecteren. Bij T=0 is het altijd 0 of 1 omdat er maar 1 ronde is.
+
+### plot7_coop_per_opponent.png — Coöperatie-rate per tegenstander-strategie
+Gegroepeerde barplot per spel met de tegenstander (AC, AD, TfT, Random) op de x-as en een balk per model. Toont of LLM's hun gedrag aanpassen aan de strategie van de tegenstander. Een model dat meer coöpereert tegen AC dan tegen AD past zich aan.
+
+### plot8_payoff_evolution.png — Payoff-evolutie over rondes (T=1)
+Lijnplot van de gemiddelde payoff per ronde per model per spel, alleen bij T=1. Toont of modellen leren en betere resultaten behalen naarmate het spel vordert. Een stijgende lijn wijst op leergedrag.
+
 ## Methodologische keuzes
 
 ### Temperatuur
