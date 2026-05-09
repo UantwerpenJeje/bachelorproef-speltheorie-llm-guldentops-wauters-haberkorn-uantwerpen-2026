@@ -18,15 +18,14 @@ RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results'
 
 # ── Reference values ──────────────────────────────────────────────────────────
 HUMAN_COOP = {
-    'prisoners_dilemma': 0.675,  # 60-75%, midpoint
+    'prisoners_dilemma': 0.675,
     'chicken_game':      0.50,
     'stag_hunt':         0.60,
 }
-HUMAN_DICTATOR_SHARE = 28.0   # euros out of 100
-HUMAN_BEAUTY_R1      = 36.0   # round-1 mean
+HUMAN_DICTATOR_SHARE = 28.0
+HUMAN_BEAUTY_R1      = 36.0
 
-# level-k thresholds (uniform prior on [0,100], target = 2/3)
-LEVEL_K_THRESHOLDS = [(45, 0), (28, 1), (18, 2), (5, 3)]  # (lower-bound, level)
+LEVEL_K_THRESHOLDS = [(45, 0), (28, 1), (18, 2), (5, 3)]
 
 GAME_LABEL = {
     'prisoners_dilemma': "Prisoner's Dilemma",
@@ -54,6 +53,15 @@ SHORT_NAME = {
     'llama-3.1-8b':  'Llama\n3.1-8B',
     'grok':          'Grok',
 }
+# Distinct marker per model for line plots
+MODEL_MARKERS = {
+    'gpt-4o-mini':   'o',
+    'claude-haiku':  's',
+    'gemini-flash':  '^',
+    'deepseek-chat': 'D',
+    'llama-3.1-8b':  'v',
+    'grok':          'P',
+}
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
@@ -61,13 +69,13 @@ SHORT_NAME = {
 def load_data():
     all_csv = glob.glob(os.path.join(RESULTS_DIR, '*.csv'))
 
-    iterative  = [f for f in all_csv
-                  if os.path.basename(f).startswith('results_')
-                  and 'llmvsllm' not in f
-                  and 'oneshot'  not in f]
-    llmvsllm   = [f for f in all_csv if 'llmvsllm'      in f]
-    dictator   = [f for f in all_csv if 'dictator_game'  in f]
-    beauty     = [f for f in all_csv if 'beauty_contest' in f]
+    iterative = [f for f in all_csv
+                 if os.path.basename(f).startswith('results_')
+                 and 'llmvsllm' not in f
+                 and 'oneshot'  not in f]
+    llmvsllm  = [f for f in all_csv if 'llmvsllm'      in f]
+    dictator  = [f for f in all_csv if 'dictator_game'  in f]
+    beauty    = [f for f in all_csv if 'beauty_contest' in f]
 
     def concat(files):
         frames = [pd.read_csv(f) for f in files]
@@ -79,15 +87,11 @@ def load_data():
 # ── Nash-deviation helper ─────────────────────────────────────────────────────
 
 def _nash_dev(llm_act, opp_act, game):
-    """1 = deviated from Nash, 0 = at Nash, NaN = undefined."""
     if game == 'prisoners_dilemma':
-        # Dominant strategy: D.  Deviation = playing C.
         return 1 if llm_act == 'C' else 0
     if game == 'chicken_game':
-        # Pure-strategy Nash: (C,D) and (D,C).
         return 0 if (llm_act, opp_act) in {('C', 'D'), ('D', 'C')} else 1
     if game == 'stag_hunt':
-        # Nash equilibria: (C,C) and (D,D).
         return 0 if (llm_act, opp_act) in {('C', 'C'), ('D', 'D')} else 1
     return np.nan
 
@@ -96,7 +100,7 @@ def level_k(mean_val):
     for threshold, k in LEVEL_K_THRESHOLDS:
         if mean_val >= threshold:
             return k
-    return 4  # Nash (≈0)
+    return 4
 
 
 # ── Analysis functions ────────────────────────────────────────────────────────
@@ -116,16 +120,15 @@ def analyze_iterative(df):
     agg = (
         df.groupby(grp_cols)
         .agg(
-            coop_rate=    ('coop',      'mean'),
-            nash_dev_rate=('nash_dev',  'mean'),
-            payoff_mean=  ('llm_payoff','mean'),
-            payoff_std=   ('llm_payoff','std'),
-            n_rounds=     ('coop',      'count'),
+            coop_rate=    ('coop',       'mean'),
+            nash_dev_rate=('nash_dev',   'mean'),
+            payoff_mean=  ('llm_payoff', 'mean'),
+            payoff_std=   ('llm_payoff', 'std'),
+            n_rounds=     ('coop',       'count'),
         )
         .reset_index()
     )
 
-    # Framing effect (neutral − competitive) per model × game × opponent × temp
     pivot = agg.pivot_table(
         index=['model', 'game', 'opponent_strategy', 'temperature'],
         columns='framing',
@@ -199,7 +202,6 @@ def build_summary_table(iter_agg, dictator_agg, beauty_overall, llm_agg):
     for model in MODEL_ORDER:
         row = {'model': model}
 
-        # Iterative games
         for game in games:
             for temp in [0, 1]:
                 sub = iter_agg[
@@ -208,11 +210,10 @@ def build_summary_table(iter_agg, dictator_agg, beauty_overall, llm_agg):
                     (iter_agg['temperature'] == temp)
                 ]
                 tag = f"{game[:2].upper()}_T{temp}"
-                row[f'{tag}_coop']    = sub['coop_rate'].mean()    if not sub.empty else np.nan
-                row[f'{tag}_nash_dev']= sub['nash_dev_rate'].mean() if not sub.empty else np.nan
-                row[f'{tag}_payoff']  = sub['payoff_mean'].mean()   if not sub.empty else np.nan
+                row[f'{tag}_coop']     = sub['coop_rate'].mean()     if not sub.empty else np.nan
+                row[f'{tag}_nash_dev'] = sub['nash_dev_rate'].mean()  if not sub.empty else np.nan
+                row[f'{tag}_payoff']   = sub['payoff_mean'].mean()    if not sub.empty else np.nan
 
-        # Dictator
         for temp in [0, 1]:
             sub = dictator_agg[
                 (dictator_agg['model'] == model) &
@@ -220,7 +221,6 @@ def build_summary_table(iter_agg, dictator_agg, beauty_overall, llm_agg):
             ]
             row[f'dictator_T{temp}_shared'] = sub['mean_shared'].mean() if not sub.empty else np.nan
 
-        # Beauty contest
         for temp in [0, 1]:
             sub = beauty_overall[
                 (beauty_overall['model'] == model) &
@@ -252,6 +252,21 @@ def _model_xticks(ax, models):
     ax.set_xticklabels([SHORT_NAME.get(m, m) for m in models], fontsize=7)
 
 
+def _label_bars(ax, positions, heights, errors=None, fmt='{:.0%}',
+                fontsize=6.5, pad=0.03):
+    """Write value labels above bar tops (+ error cap if provided)."""
+    for xi, h in zip(positions, heights):
+        if np.isnan(h):
+            continue
+        e = 0.0
+        if errors is not None:
+            idx = list(positions).index(xi)
+            v = errors.iloc[idx] if hasattr(errors, 'iloc') else errors[idx]
+            e = 0.0 if np.isnan(v) else float(v)
+        ax.text(xi, h + e + pad, fmt.format(h),
+                ha='center', va='bottom', fontsize=fontsize, fontweight='bold')
+
+
 # ── Plot 1: Cooperation rate per model per game ───────────────────────────────
 
 def plot_coop_per_game(iter_agg):
@@ -272,21 +287,24 @@ def plot_coop_per_game(iter_agg):
                color=[MODEL_COLORS.get(m, 'grey') for m in MODEL_ORDER],
                alpha=0.85, edgecolor='white')
 
+        # value labels above each bar
+        _label_bars(ax, range(len(MODEL_ORDER)), means, errors=stds,
+                    fmt='{:.0%}', pad=0.04)
+
         _model_xticks(ax, MODEL_ORDER)
         ax.set_title(GAME_LABEL[game], fontsize=10)
         ax.set_ylabel('Cooperation Rate')
-        ax.set_ylim(0, 1.25)
+        ax.set_ylim(0, 1.30)
 
         if game == 'prisoners_dilemma':
             _hline(ax, 0, 'Nash = D (0)', 'red')
         elif game == 'chicken_game':
             _hline(ax, 0.5, 'Nash mixed (≈0.5)', 'red')
-        else:  # stag_hunt
+        else:
             _hline(ax, 1, 'Nash (C,C)', 'red')
             _hline(ax, 0, 'Nash (D,D)', 'red', ls=':')
 
-        _hline(ax, HUMAN_COOP[game],
-               f'Human avg ({HUMAN_COOP[game]:.0%})', 'green')
+        _hline(ax, HUMAN_COOP[game], f'Human avg ({HUMAN_COOP[game]:.0%})', 'green')
         ax.legend(fontsize=7, loc='upper right')
 
     plt.tight_layout()
@@ -303,7 +321,7 @@ def plot_coop_temp(iter_agg):
     fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
     fig.suptitle('Cooperation Rate: T=0 vs T=1 per Model per Game', fontsize=13)
 
-    x = np.arange(len(MODEL_ORDER))
+    x     = np.arange(len(MODEL_ORDER))
     width = 0.35
 
     for ax, game in zip(axes, games):
@@ -320,14 +338,17 @@ def plot_coop_temp(iter_agg):
                    label=label, hatch=hatch,
                    alpha=0.82, edgecolor='grey')
 
+            # value labels
+            _label_bars(ax, x + offset, means, errors=stds,
+                        fmt='{:.0%}', pad=0.04)
+
         _model_xticks(ax, MODEL_ORDER)
         ax.set_title(GAME_LABEL[game], fontsize=10)
         ax.set_ylabel('Cooperation Rate')
-        ax.set_ylim(0, 1.25)
+        ax.set_ylim(0, 1.35)
         ax.legend(fontsize=8)
 
-        _hline(ax, HUMAN_COOP[game],
-               f'Human avg ({HUMAN_COOP[game]:.0%})', 'green')
+        _hline(ax, HUMAN_COOP[game], f'Human avg ({HUMAN_COOP[game]:.0%})', 'green')
         if game == 'prisoners_dilemma':
             _hline(ax, 0, 'Nash = D', 'red')
         elif game == 'chicken_game':
@@ -337,7 +358,7 @@ def plot_coop_temp(iter_agg):
     _savefig('plot2_coop_temperature.png')
 
 
-# ── Plot 3: Beauty Contest line plot ──────────────────────────────────────────
+# ── Plot 3: Beauty Contest ────────────────────────────────────────────────────
 
 def plot_beauty_rounds(by_round):
     if by_round.empty:
@@ -348,33 +369,64 @@ def plot_beauty_rounds(by_round):
     if len(temps) == 1:
         axes = [axes]
 
-    fig.suptitle('Beauty Contest – Mean Chosen Number per Round', fontsize=13)
+    fig.suptitle('Beauty Contest – Mean Chosen Number', fontsize=13)
+
+    ref_lines = [
+        (50, 'Level 0 (50)', 'grey',   ':'),
+        (33, 'Level 1 (33)', 'orange', ':'),
+        (22, 'Level 2 (22)', 'purple', ':'),
+        (0,  'Nash (0)',     'red',    '--'),
+        (HUMAN_BEAUTY_R1, f'Human R1 ({HUMAN_BEAUTY_R1})', 'green', '--'),
+    ]
 
     for ax, temp in zip(axes, temps):
         sub = by_round[by_round['temperature'] == temp]
-        for model in MODEL_ORDER:
-            m_sub = sub[sub['model'] == model]
-            if m_sub.empty:
-                continue
-            # average over framings for the line
-            agg = m_sub.groupby('round')['mean_number'].mean()
-            ax.plot(agg.index, agg.values,
-                    label=SHORT_NAME.get(model, model),
+
+        if temp == 0:
+            # Only 1 round → barplot per model (average over framings)
+            means = (
+                sub.groupby('model')['mean_number']
+                .mean()
+                .reindex(MODEL_ORDER)
+            )
+            ax.bar(
+                range(len(MODEL_ORDER)), means,
+                color=[MODEL_COLORS.get(m, 'grey') for m in MODEL_ORDER],
+                alpha=0.85, edgecolor='white',
+            )
+            _label_bars(ax, range(len(MODEL_ORDER)), means,
+                        fmt='{:.1f}', pad=0.8)
+            _model_xticks(ax, MODEL_ORDER)
+            ax.set_xlabel('Model')
+            ax.set_title('T=0 (1 ronde — deterministisch)', fontsize=10)
+            ax.legend(fontsize=7, loc='upper right')
+
+        else:
+            # T=1 → line plot with thick lines and distinct markers
+            for model in MODEL_ORDER:
+                m_sub = sub[sub['model'] == model]
+                if m_sub.empty:
+                    continue
+                agg = m_sub.groupby('round')['mean_number'].mean()
+                ax.plot(
+                    agg.index, agg.values,
+                    label=SHORT_NAME.get(model, model).replace('\n', ' '),
                     color=MODEL_COLORS.get(model, 'grey'),
-                    marker='o', markersize=3, linewidth=1.8)
+                    marker=MODEL_MARKERS.get(model, 'o'),
+                    markersize=6,
+                    linewidth=2.5,
+                    markeredgecolor='white',
+                    markeredgewidth=0.6,
+                )
+            ax.set_xlabel('Round')
+            ax.set_title(f'T={temp}', fontsize=10)
+            ax.legend(fontsize=7, loc='upper right', ncol=2)
 
-        _hline(ax, 50,   'Level 0 (50)',               'grey',   ':')
-        _hline(ax, 33,   'Level 1 (33)',               'orange', ':')
-        _hline(ax, 22,   'Level 2 (22)',               'purple', ':')
-        _hline(ax, 0,    'Nash (0)',                   'red',    '--')
-        _hline(ax, HUMAN_BEAUTY_R1,
-               f'Human R1 ({HUMAN_BEAUTY_R1})', 'green', '--')
+        for y, lbl, col, ls in ref_lines:
+            _hline(ax, y, lbl, col, ls=ls)
 
-        ax.set_title(f'T={temp}', fontsize=11)
-        ax.set_xlabel('Round')
-        ax.set_ylabel('Mean Number')
+        ax.set_ylabel('Mean Chosen Number')
         ax.set_ylim(-5, 65)
-        ax.legend(fontsize=7, loc='upper right', ncol=2)
 
     plt.tight_layout()
     _savefig('plot3_beauty_contest.png')
@@ -403,13 +455,17 @@ def plot_dictator(dictator_agg):
                color=[MODEL_COLORS.get(m, 'grey') for m in MODEL_ORDER],
                alpha=0.85, edgecolor='white')
 
+        # value labels (amounts in integers)
+        _label_bars(ax, range(len(MODEL_ORDER)), means, errors=stds,
+                    fmt='{:.0f}', pad=2.5)
+
         _model_xticks(ax, MODEL_ORDER)
         ax.set_title(f'T={temp}', fontsize=11)
         ax.set_ylabel('Amount Shared (out of 100)')
-        ax.set_ylim(0, 130)
+        ax.set_ylim(0, 140)
 
-        _hline(ax, 0,                    'Nash (0)',                    'red')
-        _hline(ax, HUMAN_DICTATOR_SHARE, f'Human avg ({HUMAN_DICTATOR_SHARE}€)', 'green')
+        _hline(ax, 0,                    'Nash (0)',                     'red')
+        _hline(ax, HUMAN_DICTATOR_SHARE, f'Human avg ({HUMAN_DICTATOR_SHARE:.0f}€)', 'green')
         ax.legend(fontsize=8)
 
     plt.tight_layout()
@@ -455,7 +511,6 @@ def plot_llmvsllm_heatmaps(llm_agg):
     n_rows, n_cols = len(temps), len(games)
     fig, axes = plt.subplots(n_rows, n_cols,
                              figsize=(5.5 * n_cols, 5 * n_rows))
-    # normalise axes to 2-D array
     if n_rows == 1 and n_cols == 1:
         axes = [[axes]]
     elif n_rows == 1:
@@ -475,8 +530,7 @@ def plot_llmvsllm_heatmaps(llm_agg):
                 (llm_agg['temperature'] == temp)
             ]
 
-            matrix = pd.DataFrame(np.nan,
-                                  index=MODEL_ORDER, columns=MODEL_ORDER)
+            matrix = pd.DataFrame(np.nan, index=MODEL_ORDER, columns=MODEL_ORDER)
             for _, row in sub.iterrows():
                 if row['model'] in MODEL_ORDER and row['opponent_model'] in MODEL_ORDER:
                     matrix.loc[row['model'], row['opponent_model']] = row['coop_rate']
@@ -492,7 +546,14 @@ def plot_llmvsllm_heatmaps(llm_agg):
                 linewidths=0.5,
                 cbar_kws={'shrink': 0.85},
             )
-            ax.set_title(f'{GAME_LABEL[game]} | T={temp}', fontsize=9)
+
+            # Clarify that T=0 means only 1 deterministic round
+            if temp == 0:
+                title = f'{GAME_LABEL[game]}\nT=0 (1 ronde — deterministisch)'
+            else:
+                title = f'{GAME_LABEL[game]} | T=1'
+
+            ax.set_title(title, fontsize=9)
             ax.set_xlabel('Opponent model', fontsize=8)
             ax.set_ylabel('Model',          fontsize=8)
             ax.tick_params(axis='x', labelsize=7, rotation=30)
@@ -500,6 +561,103 @@ def plot_llmvsllm_heatmaps(llm_agg):
 
     plt.tight_layout()
     _savefig('plot6_llmvsllm_heatmaps.png')
+
+
+# ── Plot 7: Cooperation rate per opponent strategy ────────────────────────────
+
+def plot_coop_per_opponent(iter_agg):
+    if iter_agg.empty:
+        return
+
+    games     = ['prisoners_dilemma', 'chicken_game', 'stag_hunt']
+    opponents = ['AC', 'AD', 'TfT', 'Random']
+
+    n_models = len(MODEL_ORDER)
+    width    = 0.13
+    x        = np.arange(len(opponents))
+
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+    fig.suptitle(
+        'Cooperation Rate per Opponent Strategy\n(all framings & temperatures)',
+        fontsize=13,
+    )
+
+    for ax, game in zip(axes, games):
+        sub = iter_agg[iter_agg['game'] == game]
+
+        for mi, model in enumerate(MODEL_ORDER):
+            m_sub  = sub[sub['model'] == model]
+            means  = m_sub.groupby('opponent_strategy')['coop_rate'].mean().reindex(opponents)
+            offset = (mi - (n_models - 1) / 2) * width
+            ax.bar(
+                x + offset, means, width,
+                label=SHORT_NAME.get(model, model).replace('\n', ' '),
+                color=MODEL_COLORS.get(model, 'grey'),
+                alpha=0.85, edgecolor='white',
+            )
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(opponents, fontsize=9)
+        ax.set_title(GAME_LABEL[game], fontsize=10)
+        ax.set_ylabel('Cooperation Rate')
+        ax.set_ylim(0, 1.35)
+        ax.legend(fontsize=7, loc='upper right', ncol=2)
+
+        if game == 'prisoners_dilemma':
+            _hline(ax, 0,   'Nash = D',    'red')
+        elif game == 'chicken_game':
+            _hline(ax, 0.5, 'Nash mixed',  'red')
+        _hline(ax, HUMAN_COOP[game],
+               f'Human avg ({HUMAN_COOP[game]:.0%})', 'green')
+
+    plt.tight_layout()
+    _savefig('plot7_coop_per_opponent.png')
+
+
+# ── Plot 8: Payoff evolution over rounds (T=1) ───────────────────────────────
+
+def plot_payoff_evolution(iter_df):
+    if iter_df.empty:
+        return
+
+    df = iter_df[iter_df['temperature'] == 1].copy()
+    if df.empty:
+        return
+
+    games = ['prisoners_dilemma', 'chicken_game', 'stag_hunt']
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig.suptitle(
+        'Payoff Evolution over Rounds (T=1)\n'
+        '(mean over all opponents & framings)',
+        fontsize=13,
+    )
+
+    for ax, game in zip(axes, games):
+        sub = df[df['game'] == game]
+
+        for model in MODEL_ORDER:
+            m_sub = sub[sub['model'] == model]
+            if m_sub.empty:
+                continue
+            agg = m_sub.groupby('round')['llm_payoff'].mean()
+            ax.plot(
+                agg.index, agg.values,
+                label=SHORT_NAME.get(model, model).replace('\n', ' '),
+                color=MODEL_COLORS.get(model, 'grey'),
+                marker=MODEL_MARKERS.get(model, 'o'),
+                markersize=6,
+                linewidth=2.5,
+                markeredgecolor='white',
+                markeredgewidth=0.6,
+            )
+
+        ax.set_title(GAME_LABEL[game], fontsize=10)
+        ax.set_xlabel('Round')
+        ax.set_ylabel('Mean Payoff')
+        ax.legend(fontsize=7, loc='best', ncol=2)
+
+    plt.tight_layout()
+    _savefig('plot8_payoff_evolution.png')
 
 
 # ── Terminal summary ──────────────────────────────────────────────────────────
@@ -581,7 +739,6 @@ def main():
     print(f'  Dictator rows  : {len(dictator_df)}')
     print(f'  Beauty rows    : {len(beauty_df)}')
 
-    # ── Analyses
     print('\n[1] Iterative games ...')
     iter_agg, pivot_framing = analyze_iterative(iter_df)
     print_iterative_summary(iter_agg)
@@ -598,14 +755,12 @@ def main():
     llm_agg = analyze_llmvsllm(llm_df)
     print_llmvsllm_summary(llm_agg)
 
-    # ── Summary table
     print('\n[5] Building summary table ...')
     summary = build_summary_table(iter_agg, dictator_agg, beauty_overall, llm_agg)
     summary_path = os.path.join(RESULTS_DIR, 'summary_table.csv')
     summary.to_csv(summary_path, index=False, float_format='%.4f')
     print(f'  Saved {summary_path}')
 
-    # ── Plots
     print('\n[6] Generating plots ...')
     plot_coop_per_game(iter_agg)
     plot_coop_temp(iter_agg)
@@ -613,6 +768,8 @@ def main():
     plot_dictator(dictator_agg)
     plot_framing_effect(pivot_framing)
     plot_llmvsllm_heatmaps(llm_agg)
+    plot_coop_per_opponent(iter_agg)
+    plot_payoff_evolution(iter_df)
 
     print(f'\n{sep}')
     print('Done. All outputs are in results/')
