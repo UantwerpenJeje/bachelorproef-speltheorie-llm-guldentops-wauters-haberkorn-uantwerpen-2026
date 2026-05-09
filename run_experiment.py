@@ -51,6 +51,7 @@ def play_round(
     round_num: int,
     total_rounds: int,
     opponent_strategy_name: str,
+    temperature: float,
     dry_run: bool = False,
 ) -> dict:
     """Speelt één ronde en geeft de resultaten terug als een dict."""
@@ -71,7 +72,7 @@ def play_round(
         raw_response = call_llm(
             model=model_string,
             prompt=prompt,
-            temperature=config.TEMPERATURE,
+            temperature=temperature,
         )
         try:
             llm_action = parse_action(raw_response, game_name, framing)
@@ -106,11 +107,13 @@ def play_run(
     framing: str,
     opponent_strategy_name: str,
     run_id: int,
+    temperature: float,
     csv_writer,
     dry_run: bool = False,
 ) -> None:
     """Speelt een volledige run (X rondes) en schrijft elke ronde weg."""
-    total_rounds = config.ROUNDS[game_name]
+    # Bij T=0 is het antwoord deterministisch; 1 ronde volstaat.
+    total_rounds = 1 if temperature == 0 else config.ROUNDS[game_name]
     history = []
 
     for round_num in range(1, total_rounds + 1):
@@ -123,6 +126,7 @@ def play_run(
             round_num=round_num,
             total_rounds=total_rounds,
             opponent_strategy_name=opponent_strategy_name,
+            temperature=temperature,
             dry_run=dry_run,
         )
 
@@ -139,7 +143,7 @@ def play_run(
             "llm_payoff":        result["llm_payoff"],
             "opponent_payoff":   result["opponent_payoff"],
             "raw_response":      result["raw_response"],
-            "temperature":       config.TEMPERATURE,
+            "temperature":       temperature,
         })
 
         # Voeg toe aan geschiedenis voor de volgende ronde
@@ -212,12 +216,18 @@ def main():
         "raw_response", "temperature",
     ]
 
+    temperatures = config.TEMPERATURES
+
     # Totaal aantal LLM-calls inschatten
-    total_calls = (
-        len(models) * len(games) * len(strategies) * len(framings) * n_runs
-        * sum(config.ROUNDS[g] for g in games) // len(games)  # gemiddeld
+    # T=0: 1 ronde per spel; T=1: config.ROUNDS[g] rondes per spel
+    total_calls = sum(
+        len(models) * len(strategies) * len(framings) * n_runs
+        * (1 if t == 0 else config.ROUNDS[g])
+        for t in temperatures
+        for g in games
     )
     print(f"Geschat aantal API-calls: ~{total_calls}")
+    print(f"Temperaturen: {temperatures}")
     print(f"Resultaten worden weggeschreven naar: {output_path}")
     print(f"Dry-run modus: {args.dry_run}")
     print()
@@ -228,8 +238,8 @@ def main():
         writer.writeheader()
 
         # tqdm geeft een visuele voortgangsbalk
-        conditions = list(product(models, games, strategies, framings))
-        for (model_name, game_name, strategy, framing) in tqdm(
+        conditions = list(product(models, games, strategies, framings, temperatures))
+        for (model_name, game_name, strategy, framing, temperature) in tqdm(
             conditions, desc="Conditions", unit="cond"
         ):
             model_string = config.MODELS[model_name]
@@ -242,13 +252,14 @@ def main():
                         framing=framing,
                         opponent_strategy_name=strategy,
                         run_id=run_id,
+                        temperature=temperature,
                         csv_writer=writer,
                         dry_run=args.dry_run,
                     )
                     f.flush()  # forceer wegschrijven naar disk
                 except Exception as e:
                     print(f"\n[ERROR] {model_name} / {game_name} / {strategy} / "
-                          f"{framing} / run {run_id}: {e}")
+                          f"{framing} / T={temperature} / run {run_id}: {e}")
                     print("Doorgaan met volgende run...\n")
 
     print(f"\nKlaar! Resultaten staan in: {output_path}")

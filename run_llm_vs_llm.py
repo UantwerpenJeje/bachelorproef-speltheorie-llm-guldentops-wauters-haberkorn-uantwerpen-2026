@@ -61,6 +61,7 @@ def play_round_llm_vs_llm(
     history_p2: list,
     round_num: int,
     total_rounds: int,
+    temperature: float,
     dry_run: bool = False,
 ) -> dict:
     """
@@ -112,12 +113,12 @@ def play_round_llm_vs_llm(
         raw_p1 = call_llm(
             model=model1_string,
             prompt=prompt_p1,
-            temperature=config.TEMPERATURE,
+            temperature=temperature,
         )
         raw_p2 = call_llm(
             model=model2_string,
             prompt=prompt_p2,
-            temperature=config.TEMPERATURE,
+            temperature=temperature,
         )
 
         # 3. Antwoorden parsen naar interne C/D labels
@@ -161,6 +162,7 @@ def play_run_llm_vs_llm(
     game_name: str,
     framing: str,
     run_id: int,
+    temperature: float,
     csv_writer,
     dry_run: bool = False,
 ) -> None:
@@ -188,12 +190,15 @@ def play_run_llm_vs_llm(
         Framing van de prompt.
     run_id : int
         Volgnummer van de huidige run (1-gebaseerd).
+    temperature : float
+        Temperatuur voor de LLM-calls (0 = deterministisch, 1 = variabel).
     csv_writer : csv.DictWriter
         Open CSV-writer om resultaten onmiddellijk weg te schrijven.
     dry_run : bool
         Als True, worden geen echte API-calls gedaan.
     """
-    total_rounds = config.ROUNDS[game_name]
+    # Bij T=0 is het antwoord deterministisch; 1 ronde volstaat.
+    total_rounds = 1 if temperature == 0 else config.ROUNDS[game_name]
 
     # Aparte geschiedenis voor elke speler, elk vanuit hun eigen perspectief.
     # history_p1: llm_action = actie van p1, opponent_action = actie van p2
@@ -211,6 +216,7 @@ def play_run_llm_vs_llm(
             history_p2=history_p2,
             round_num=round_num,
             total_rounds=total_rounds,
+            temperature=temperature,
             dry_run=dry_run,
         )
 
@@ -227,7 +233,7 @@ def play_run_llm_vs_llm(
             "llm_payoff":        result["payoff_p1"],
             "opponent_payoff":   result["payoff_p2"],
             "raw_response":      result["raw_p1"],
-            "temperature":       config.TEMPERATURE,
+            "temperature":       temperature,
             "opponent_model":    model2_name,
             "perspective":       "player1",
         })
@@ -245,7 +251,7 @@ def play_run_llm_vs_llm(
             "llm_payoff":        result["payoff_p2"],
             "opponent_payoff":   result["payoff_p1"],
             "raw_response":      result["raw_p2"],
-            "temperature":       config.TEMPERATURE,
+            "temperature":       temperature,
             "opponent_model":    model1_name,
             "perspective":       "player2",
         })
@@ -369,23 +375,31 @@ voorbeelden:
         "opponent_model", "perspective",
     ]
 
+    temperatures = config.TEMPERATURES
+
     # Schatting: 2 API-calls per ronde (één per speler)
-    avg_rounds = sum(config.ROUNDS[g] for g in games) / len(games)
-    total_calls = int(len(pairs) * len(games) * len(framings) * n_runs * avg_rounds * 2)
+    # T=0: 1 ronde per spel; T=1: config.ROUNDS[g] rondes per spel
+    total_calls = sum(
+        len(pairs) * len(framings) * n_runs
+        * (1 if t == 0 else config.ROUNDS[g]) * 2
+        for t in temperatures
+        for g in games
+    )
     print(f"Geschat aantal API-calls: ~{total_calls}")
+    print(f"Temperaturen: {temperatures}")
     print(f"Paren: {[f'{m1} vs {m2}' for m1, m2 in pairs]}")
     print(f"Resultaten worden weggeschreven naar: {output_path}")
     print(f"Dry-run modus: {args.dry_run}")
     print()
 
     # --- Hoofdloop ---
-    # We loopen over elke conditie (paar x spel x framing) en spelen n_runs keer.
+    # We loopen over elke conditie (paar x spel x framing x temperatuur) en spelen n_runs keer.
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
-        conditions = list(product(pairs, games, framings))
-        for ((model1_name, model2_name), game_name, framing) in tqdm(
+        conditions = list(product(pairs, games, framings, temperatures))
+        for ((model1_name, model2_name), game_name, framing, temperature) in tqdm(
             conditions, desc="Condities", unit="cond"
         ):
             model1_string = config.MODELS[model1_name]
@@ -401,6 +415,7 @@ voorbeelden:
                         game_name=game_name,
                         framing=framing,
                         run_id=run_id,
+                        temperature=temperature,
                         csv_writer=writer,
                         dry_run=args.dry_run,
                     )
@@ -408,7 +423,7 @@ voorbeelden:
                 except Exception as e:
                     print(
                         f"\n[ERROR] {model1_name} vs {model2_name} / "
-                        f"{game_name} / {framing} / run {run_id}: {e}"
+                        f"{game_name} / {framing} / T={temperature} / run {run_id}: {e}"
                     )
                     print("Doorgaan met volgende run...\n")
 

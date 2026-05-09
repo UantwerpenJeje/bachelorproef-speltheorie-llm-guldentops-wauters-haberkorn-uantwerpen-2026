@@ -31,10 +31,11 @@ MODELS = {
 # Experimentparameters
 # ---------------------------------------------------------------------------
 
-# Temperatuur: 0.7 geeft variatie tussen runs (nodig om gemiddelde + stdev
-# te kunnen berekenen). T=0 zou altijd hetzelfde antwoord geven bij
-# deterministische tegenstanders (AC, AD, TfT) en runs zouden niets toevoegen.
-TEMPERATURE = 0.7
+# Twee temperatuurcondities:
+#   T=0 — deterministisch; bij iteratieve spellen volstaat 1 ronde (het antwoord
+#          verandert niet, dus extra rondes voegen geen informatie toe).
+#   T=1 — maximaal variabel; het volledige aantal rondes wordt gespeeld.
+TEMPERATURES = [0, 1]
 
 # Aantal runs per conditie (1 conditie = 1 model x 1 spel x 1 tegenstander x 1 framing)
 RUNS_ITERATIVE = 1         # voor PD, Chicken, Stag Hunt

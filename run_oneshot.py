@@ -72,6 +72,7 @@ def run_dictator(
     model_string: str,
     framing: str,
     run_id: int,
+    temperature: float,
     csv_writer,
     dry_run: bool = False,
 ) -> None:
@@ -88,6 +89,8 @@ def run_dictator(
         "neutral" of "competitive".
     run_id : int
         Volgnummer van de huidige run.
+    temperature : float
+        Temperatuur voor de LLM-call (0 = deterministisch, 1 = variabel).
     csv_writer : csv.DictWriter
         Open CSV-writer.
     dry_run : bool
@@ -99,7 +102,7 @@ def run_dictator(
         raw = "[DRY RUN]"
         amount = 0
     else:
-        raw = call_llm(model=model_string, prompt=prompt, temperature=config.TEMPERATURE)
+        raw = call_llm(model=model_string, prompt=prompt, temperature=temperature)
         try:
             amount = parse_amount(raw)
         except ValueError as e:
@@ -119,7 +122,7 @@ def run_dictator(
         "payoff_dictator": payoff_dictator,
         "payoff_receiver": payoff_receiver,
         "raw_response":    raw,
-        "temperature":     config.TEMPERATURE,
+        "temperature":     temperature,
     })
 
 
@@ -134,6 +137,7 @@ def run_beauty(
     run_id: int,
     num_players: int,
     num_rounds: int,
+    temperature: float,
     csv_writer,
     dry_run: bool = False,
 ) -> None:
@@ -158,7 +162,9 @@ def run_beauty(
     num_players : int
         Totaal aantal spelers (incl. het LLM).
     num_rounds : int
-        Aantal rondes in deze run.
+        Aantal rondes in deze run (al aangepast voor temperatuurconditie).
+    temperature : float
+        Temperatuur voor de LLM-calls (0 = deterministisch, 1 = variabel).
     csv_writer : csv.DictWriter
         Open CSV-writer (één rij per ronde).
     dry_run : bool
@@ -183,7 +189,7 @@ def run_beauty(
             llm_number = 33  # typische waarde ronde 1 als dummy
         else:
             raw = call_llm(
-                model=model_string, prompt=prompt, temperature=config.TEMPERATURE
+                model=model_string, prompt=prompt, temperature=temperature
             )
             try:
                 llm_number = parse_amount(raw)
@@ -220,7 +226,7 @@ def run_beauty(
             "llm_won":        1 if winner_idx == 0 else 0,
             "payoff":         payoff,
             "raw_response":   raw,
-            "temperature":    config.TEMPERATURE,
+            "temperature":    temperature,
             "num_players":    num_players,
             "num_rounds":     num_rounds,
         })
@@ -334,28 +340,31 @@ voorbeelden:
         writer.writeheader()
         csv_writers[game_name] = writer
 
+    temperatures = config.TEMPERATURES
+
     # Schatting van het aantal API-calls
-    calls_per_run = {
-        "dictator_game":  1,
-        "beauty_contest": n_rounds,
-    }
+    # Dictator: altijd 1 call per run; Beauty Contest: T=0 → 1 ronde, T=1 → n_rounds
     total_calls = sum(
-        len(args.models) * len(framings) * n_runs * calls_per_run[g]
+        len(args.models) * len(framings) * n_runs
+        * (1 if (g == "beauty_contest" and t == 0) else
+           n_rounds if g == "beauty_contest" else 1)
+        for t in temperatures
         for g in games
     )
     print(f"Geschat aantal API-calls: ~{total_calls}")
+    print(f"Temperaturen: {temperatures}")
     print(f"Spellen: {games}")
     print(f"Modellen: {args.models}")
     if "beauty_contest" in games:
-        print(f"Beauty Contest: {n_players} spelers, {n_rounds} rondes")
+        print(f"Beauty Contest: {n_players} spelers, {n_rounds} rondes (bij T=1)")
     print(f"Resultaten in: {config.RESULTS_DIR}/")
     print(f"Dry-run modus: {args.dry_run}")
     print()
 
     # --- Hoofdloop ---
     try:
-        conditions = list(product(args.models, games, framings))
-        for (model_name, game_name, framing) in tqdm(
+        conditions = list(product(args.models, games, framings, temperatures))
+        for (model_name, game_name, framing, temperature) in tqdm(
             conditions, desc="Condities", unit="cond"
         ):
             model_string = config.MODELS[model_name]
@@ -370,18 +379,22 @@ voorbeelden:
                             model_string=model_string,
                             framing=framing,
                             run_id=run_id,
+                            temperature=temperature,
                             csv_writer=writer,
                             dry_run=args.dry_run,
                         )
 
                     elif game_name == "beauty_contest":
+                        # Bij T=0 volstaat 1 ronde (deterministisch antwoord)
+                        effective_rounds = 1 if temperature == 0 else n_rounds
                         run_beauty(
                             model_name=model_name,
                             model_string=model_string,
                             framing=framing,
                             run_id=run_id,
                             num_players=n_players,
-                            num_rounds=n_rounds,
+                            num_rounds=effective_rounds,
+                            temperature=temperature,
                             csv_writer=writer,
                             dry_run=args.dry_run,
                         )
@@ -391,7 +404,7 @@ voorbeelden:
                 except Exception as e:
                     print(
                         f"\n[ERROR] {model_name} / {game_name} / "
-                        f"{framing} / run {run_id}: {e}"
+                        f"{framing} / T={temperature} / run {run_id}: {e}"
                     )
                     print("Doorgaan met volgende run...\n")
 
