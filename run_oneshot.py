@@ -3,7 +3,6 @@ run_oneshot.py
 ==============
 Orchestrator voor eenmalige (one-shot) game-theory experimenten:
     - Dictator Game  : 1 API-call per run, LLM verdeelt 100 euro.
-    - Ultimatum Game : 2 API-calls per run (proposer + responder).
     - Beauty Contest : num_rounds API-calls per run, LLM vs willekeurige spelers.
 
 Per speltype wordt een apart tijdgestempeld CSV-bestand aangemaakt in results/.
@@ -14,10 +13,6 @@ Gebruik:
 
     # Enkel Dictator Game
     python run_oneshot.py --models gpt-4o-mini --games dictator_game
-
-    # Ultimatum met een andere responder
-    python run_oneshot.py --models gpt-4o-mini --games ultimatum_game \\
-        --responder-model deepseek-chat
 
     # Beauty Contest met aangepaste parameters
     python run_oneshot.py --models gpt-4o-mini --games beauty_contest \\
@@ -41,18 +36,14 @@ import config
 from llm_client import call_llm
 from prompts import (
     build_dictator_prompt,
-    build_ultimatum_proposer_prompt,
-    build_ultimatum_responder_prompt,
     build_beauty_prompt,
     parse_amount,
-    parse_ultimatum_response,
 )
-from games import dictator_game, ultimatum_game, beauty_contest
+from games import dictator_game, beauty_contest
 
 # Mapping van CLI-naam naar game-module
 ONESHOT_GAMES = {
     "dictator_game":  dictator_game,
-    "ultimatum_game": ultimatum_game,
     "beauty_contest": beauty_contest,
 }
 
@@ -62,11 +53,6 @@ FIELDNAMES = {
         "model", "game", "framing", "run_id",
         "amount_shared", "amount_kept", "payoff_dictator", "payoff_receiver",
         "raw_response", "temperature",
-    ],
-    "ultimatum_game": [
-        "proposer_model", "responder_model", "game", "framing", "run_id",
-        "offer", "response", "payoff_proposer", "payoff_responder",
-        "raw_proposer", "raw_responder", "temperature",
     ],
     "beauty_contest": [
         "model", "game", "framing", "run_id", "round",
@@ -134,102 +120,6 @@ def run_dictator(
         "payoff_receiver": payoff_receiver,
         "raw_response":    raw,
         "temperature":     config.TEMPERATURE,
-    })
-
-
-# ---------------------------------------------------------------------------
-# Ultimatum Game — één run (proposer + responder)
-# ---------------------------------------------------------------------------
-
-def run_ultimatum(
-    proposer_name: str,
-    proposer_string: str,
-    responder_name: str,
-    responder_string: str,
-    framing: str,
-    run_id: int,
-    csv_writer,
-    dry_run: bool = False,
-) -> None:
-    """
-    Speelt één run van het Ultimatum Game: twee API-calls.
-
-    Fase 1 — proposer beslist hoeveel hij aanbiedt (0–100).
-    Fase 2 — responder ziet het aanbod en kiest ACCEPT of REJECT.
-
-    Parameters
-    ----------
-    proposer_name : str
-        Korte naam van de proposer.
-    proposer_string : str
-        Volledige LiteLLM-modelstring van de proposer.
-    responder_name : str
-        Korte naam van de responder (kan gelijk zijn aan proposer).
-    responder_string : str
-        Volledige LiteLLM-modelstring van de responder.
-    framing : str
-        "neutral" of "competitive".
-    run_id : int
-        Volgnummer van de huidige run.
-    csv_writer : csv.DictWriter
-        Open CSV-writer.
-    dry_run : bool
-        Als True, geen echte API-calls.
-    """
-    # --- Fase 1: proposer beslist ---
-    prompt_proposer = build_ultimatum_proposer_prompt(framing)
-
-    if dry_run:
-        raw_proposer = "[DRY RUN]"
-        offer = 50
-    else:
-        raw_proposer = call_llm(
-            model=proposer_string, prompt=prompt_proposer,
-            temperature=config.TEMPERATURE,
-        )
-        try:
-            offer = parse_amount(raw_proposer)
-        except ValueError as e:
-            print(f"  [parse error proposer] {e}")
-            offer = -1
-
-    # --- Fase 2: responder reageert op het aanbod ---
-    # De responder ziet enkel het aangeboden bedrag, niet de redenering.
-    prompt_responder = build_ultimatum_responder_prompt(framing, max(0, offer))
-
-    if dry_run:
-        raw_responder = "[DRY RUN]"
-        response = "ACCEPT"
-    else:
-        raw_responder = call_llm(
-            model=responder_string, prompt=prompt_responder,
-            temperature=config.TEMPERATURE,
-        )
-        try:
-            response = parse_ultimatum_response(raw_responder)
-        except ValueError as e:
-            print(f"  [parse error responder] {e}")
-            response = "PARSE_ERROR"
-
-    # --- Payoffs berekenen ---
-    if offer >= 0 and response in ("ACCEPT", "REJECT"):
-        payoff_proposer, payoff_responder = ultimatum_game.get_payoff(offer, response)
-    else:
-        payoff_proposer, payoff_responder = 0, 0
-
-    csv_writer.writerow({
-        "proposer_model":   proposer_name,
-        "responder_model":  responder_name,
-        "game":             "ultimatum_game",
-        "framing":          framing,
-        "run_id":           run_id,
-        "offer":            offer,
-        "response":         response,
-        "payoff_proposer":  payoff_proposer,
-        "payoff_responder": payoff_responder,
-        "raw_proposer":     raw_proposer,
-        "raw_responder":    raw_responder,
-        "temperature":      config.TEMPERATURE,
     })
 
 
@@ -353,15 +243,13 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Run one-shot game theory experimenten "
-            "(Dictator Game, Ultimatum Game, Beauty Contest)."
+            "(Dictator Game, Beauty Contest)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 voorbeelden:
   python run_oneshot.py --models gpt-4o-mini deepseek-chat
-  python run_oneshot.py --models gpt-4o-mini --games dictator_game ultimatum_game
-  python run_oneshot.py --models gpt-4o-mini --games ultimatum_game \\
-      --responder-model deepseek-chat
+  python run_oneshot.py --models gpt-4o-mini --games dictator_game
   python run_oneshot.py --models gpt-4o-mini --games beauty_contest \\
       --num-players 7 --num-rounds 8 --runs 20
   python run_oneshot.py --models gpt-4o-mini --dry-run
@@ -377,7 +265,7 @@ voorbeelden:
         choices=list(ONESHOT_GAMES.keys()),
         metavar="GAME",
         help=(
-            "Spellen om te testen: dictator_game, ultimatum_game, beauty_contest. "
+            "Spellen om te testen: dictator_game, beauty_contest. "
             "Default: alle."
         ),
     )
@@ -388,15 +276,6 @@ voorbeelden:
     parser.add_argument(
         "--runs", type=int, default=None,
         help="Aantal runs per conditie. Default: config.RUNS_ONE_SHOT (30).",
-    )
-    # Ultimatum-specifieke optie
-    parser.add_argument(
-        "--responder-model", default=None, metavar="MODEL",
-        dest="responder_model",
-        help=(
-            "Model dat als responder speelt in het Ultimatum Game. "
-            "Default: hetzelfde als --models (zelfspel per model)."
-        ),
     )
     # Beauty Contest-specifieke opties
     parser.add_argument(
@@ -431,11 +310,6 @@ voorbeelden:
     for m in args.models:
         if m not in config.MODELS:
             sys.exit(f"Onbekend model: {m}. Kies uit {list(config.MODELS.keys())}")
-    if args.responder_model and args.responder_model not in config.MODELS:
-        sys.exit(
-            f"Onbekend responder-model: {args.responder_model}. "
-            f"Kies uit {list(config.MODELS.keys())}"
-        )
 
     # --- Reproduceerbaarheid voor willekeurige Beauty Contest-spelers ---
     random.seed(config.RANDOM_SEED)
@@ -463,7 +337,6 @@ voorbeelden:
     # Schatting van het aantal API-calls
     calls_per_run = {
         "dictator_game":  1,
-        "ultimatum_game": 2,
         "beauty_contest": n_rounds,
     }
     total_calls = sum(
@@ -473,9 +346,6 @@ voorbeelden:
     print(f"Geschat aantal API-calls: ~{total_calls}")
     print(f"Spellen: {games}")
     print(f"Modellen: {args.models}")
-    if "ultimatum_game" in games:
-        resp = args.responder_model or "(= zelfde als proposer)"
-        print(f"Ultimatum responder: {resp}")
     if "beauty_contest" in games:
         print(f"Beauty Contest: {n_players} spelers, {n_rounds} rondes")
     print(f"Resultaten in: {config.RESULTS_DIR}/")
@@ -498,21 +368,6 @@ voorbeelden:
                         run_dictator(
                             model_name=model_name,
                             model_string=model_string,
-                            framing=framing,
-                            run_id=run_id,
-                            csv_writer=writer,
-                            dry_run=args.dry_run,
-                        )
-
-                    elif game_name == "ultimatum_game":
-                        # Responder: apart model indien opgegeven, anders zelfspel
-                        resp_name   = args.responder_model or model_name
-                        resp_string = config.MODELS[resp_name]
-                        run_ultimatum(
-                            proposer_name=model_name,
-                            proposer_string=model_string,
-                            responder_name=resp_name,
-                            responder_string=resp_string,
                             framing=framing,
                             run_id=run_id,
                             csv_writer=writer,

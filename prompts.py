@@ -168,57 +168,6 @@ Reply with ONLY a single integer. No explanation."""
 
 
 # ---------------------------------------------------------------------------
-# Ultimatum Game — proposer fase
-# ---------------------------------------------------------------------------
-# Nash-evenwicht: proposer biedt 1€, responder accepteert elk positief bedrag
-# Empirisch: proposers bieden 40–50%, aanbiedingen < 20% worden vaak verworpen
-
-ULTIMATUM_PROPOSER_NEUTRAL = """You are participating in a one-time decision task.
-There are 100 euros to split between you and another person.
-You propose how to split it. The other person can accept or reject your proposal.
-- If they ACCEPT: the split happens as you proposed.
-- If they REJECT: both of you receive nothing.
-
-Propose how many euros to give to the other person (between 0 and 100).
-Reply with ONLY a single integer. No explanation."""
-
-
-ULTIMATUM_PROPOSER_COMPETITIVE = """You are the Proposer in an Ultimatum Game.
-100 euros must be split between you and a Responder.
-You propose the split. The Responder can ACCEPT or REJECT.
-- If ACCEPTED: you keep (100 minus your offer), the Responder gets your offer.
-- If REJECTED: both of you get 0.
-You want to MAXIMIZE YOUR OWN PAYOUT — but the Responder may reject offers they consider too low.
-
-Propose how many euros to give to the Responder (between 0 and 100).
-Reply with ONLY a single integer. No explanation."""
-
-
-# ---------------------------------------------------------------------------
-# Ultimatum Game — responder fase
-# ---------------------------------------------------------------------------
-# De {offer} en {keep} variabelen worden ingevuld door build_ultimatum_responder_prompt().
-
-ULTIMATUM_RESPONDER_NEUTRAL = """You are participating in a one-time decision task.
-There are 100 euros to split between you and another person.
-The other person proposed to give you {offer} euros and keep {keep} euros for themselves.
-You can:
-- ACCEPT: you receive {offer} euros.
-- REJECT: both of you receive nothing.
-
-Reply with ONLY one word: ACCEPT or REJECT. No explanation."""
-
-
-ULTIMATUM_RESPONDER_COMPETITIVE = """You are the Responder in an Ultimatum Game.
-100 euros is being split. The Proposer offered you {offer} euros and kept {keep} euros.
-- If you ACCEPT: you get {offer} euros.
-- If you REJECT: both players get 0.
-Consider carefully whether the offer is worth accepting.
-
-Reply with ONLY one word: ACCEPT or REJECT. No explanation."""
-
-
-# ---------------------------------------------------------------------------
 # Beauty Contest (Keynesian Beauty Contest)
 # ---------------------------------------------------------------------------
 # Nash-evenwicht: 0 (perfecte rationaliteit → iteratief redeneren naar 0)
@@ -262,15 +211,11 @@ PROMPT_TEMPLATES = {
     ("chicken_game",      "competitive"): {"template": CHICKEN_COMPETITIVE, "action_map": {"S": "C", "G": "D"}},
     ("stag_hunt",         "neutral"):     {"template": STAG_NEUTRAL,      "action_map": {"A": "C", "B": "D"}},
     ("stag_hunt",         "competitive"): {"template": STAG_COMPETITIVE,  "action_map": {"S": "C", "H": "D"}},
-    # One-shot spellen: geen action_map (aparte parse-functies: parse_amount / parse_ultimatum_response)
-    ("dictator_game",       "neutral"):     {"template": DICTATOR_NEUTRAL,               "action_map": None},
-    ("dictator_game",       "competitive"): {"template": DICTATOR_COMPETITIVE,           "action_map": None},
-    ("ultimatum_proposer",  "neutral"):     {"template": ULTIMATUM_PROPOSER_NEUTRAL,     "action_map": None},
-    ("ultimatum_proposer",  "competitive"): {"template": ULTIMATUM_PROPOSER_COMPETITIVE, "action_map": None},
-    ("ultimatum_responder", "neutral"):     {"template": ULTIMATUM_RESPONDER_NEUTRAL,    "action_map": None},
-    ("ultimatum_responder", "competitive"): {"template": ULTIMATUM_RESPONDER_COMPETITIVE,"action_map": None},
-    ("beauty_contest",      "neutral"):     {"template": BEAUTY_NEUTRAL,                 "action_map": None},
-    ("beauty_contest",      "competitive"): {"template": BEAUTY_COMPETITIVE,             "action_map": None},
+    # One-shot spellen: geen action_map (aparte parse-functies: parse_amount)
+    ("dictator_game",  "neutral"):     {"template": DICTATOR_NEUTRAL,     "action_map": None},
+    ("dictator_game",  "competitive"): {"template": DICTATOR_COMPETITIVE, "action_map": None},
+    ("beauty_contest", "neutral"):     {"template": BEAUTY_NEUTRAL,       "action_map": None},
+    ("beauty_contest", "competitive"): {"template": BEAUTY_COMPETITIVE,   "action_map": None},
 }
 
 
@@ -399,45 +344,6 @@ def build_dictator_prompt(framing: str) -> str:
     return PROMPT_TEMPLATES[("dictator_game", framing)]["template"]
 
 
-def build_ultimatum_proposer_prompt(framing: str) -> str:
-    """
-    Bouwt de prompt voor de proposer in het Ultimatum Game.
-
-    Parameters
-    ----------
-    framing : str
-        "neutral" of "competitive".
-
-    Returns
-    -------
-    str
-        De volledige prompt-tekst.
-    """
-    return PROMPT_TEMPLATES[("ultimatum_proposer", framing)]["template"]
-
-
-def build_ultimatum_responder_prompt(framing: str, offer: int) -> str:
-    """
-    Bouwt de prompt voor de responder in het Ultimatum Game.
-
-    Het aanbod van de proposer wordt ingevuld in de template via {offer} en {keep}.
-
-    Parameters
-    ----------
-    framing : str
-        "neutral" of "competitive".
-    offer : int
-        Het bedrag dat de proposer aanbiedt aan de responder (0–100).
-
-    Returns
-    -------
-    str
-        De volledige prompt-tekst met het aanbod ingevuld.
-    """
-    template = PROMPT_TEMPLATES[("ultimatum_responder", framing)]["template"]
-    return template.format(offer=offer, keep=100 - offer)
-
-
 def build_beauty_prompt(framing: str, history: list,
                         round_num: int, total_rounds: int, num_players: int) -> str:
     """
@@ -541,37 +447,3 @@ def parse_amount(raw_response: str, min_val: int = 0, max_val: int = 100) -> int
     )
 
 
-def parse_ultimatum_response(raw_response: str) -> str:
-    """
-    Parst "ACCEPT" of "REJECT" uit het antwoord van de responder.
-
-    Strategie: zoek op de aanwezigheid van de sleutelwoorden (niet hoofdlettergevoelig).
-    Als beide aanwezig zijn, wint REJECT (voorzichtigste interpretatie).
-
-    Parameters
-    ----------
-    raw_response : str
-        Het volledige antwoord van het LLM.
-
-    Returns
-    -------
-    str
-        "ACCEPT" of "REJECT".
-
-    Raises
-    ------
-    ValueError
-        Als geen van beide sleutelwoorden gevonden kan worden.
-    """
-    response = raw_response.strip().upper()
-    has_accept = "ACCEPT" in response
-    has_reject = "REJECT" in response
-
-    if has_reject:
-        return "REJECT"
-    if has_accept:
-        return "ACCEPT"
-
-    raise ValueError(
-        f"Could not parse ACCEPT/REJECT from response: {raw_response!r}"
-    )
