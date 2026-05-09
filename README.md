@@ -15,13 +15,13 @@ Deze code voert geautomatiseerde experimenten uit waarin verschillende Large Lan
 ### Onderzochte spellen
 
 **Iteratief** (LLM vs vaste strategie — `run_experiment.py`)
-- **Prisoner's Dilemma** (10 rondes per run)
-- **Chicken Game** (10 rondes per run)
-- **Stag Hunt** (10 rondes per run)
+- **Prisoner's Dilemma** (1 ronde bij T=0 / 10 rondes bij T=1)
+- **Chicken Game** (1 ronde bij T=0 / 10 rondes bij T=1)
+- **Stag Hunt** (1 ronde bij T=0 / 10 rondes bij T=1)
 
 **Eenmalig / one-shot** (`run_oneshot.py`)
-- **Dictator Game** — LLM verdeelt 100€; Nash = 0€, mensen ≈ 28€
-- **Beauty Contest** — kies een getal 0–100; winnaar = dichtst bij 2/3 × gemiddelde; 20 rondes met feedback; Nash = 0
+- **Dictator Game** — LLM verdeelt 100€; Nash = 0€, mensen ≈ 28€ (1 call per run, beide temperaturen)
+- **Beauty Contest** — kies een getal 0–100; winnaar = dichtst bij 2/3 × gemiddelde; Nash = 0 (1 ronde bij T=0 / 20 rondes bij T=1)
 
 **LLM vs LLM** (`run_llm_vs_llm.py`)
 - Alle iteratieve spellen, maar de tegenstander is een tweede LLM in plaats van een vaste strategie
@@ -120,7 +120,7 @@ python run_experiment.py \
 ```bash
 python run_experiment.py
 ```
-Dit voert ~1 440 LLM-calls uit (6 modellen × 3 spellen × 4 strategieën × 2 framings × 1 run × 10 rondes).
+Dit voert ~1 584 LLM-calls uit (T=0: 6×3×4×2×1×1 = 144; T=1: 6×3×4×2×1×10 = 1 440).
 
 ### LLM vs LLM (iteratief)
 ```bash
@@ -186,7 +186,14 @@ Extra kolommen in `run_llm_vs_llm.py`: `opponent_model`, `perspective` (player1/
 ## Methodologische keuzes
 
 ### Temperatuur
-We gebruiken `temperature=0.7` (niet 0). Bij T=0 zou een deterministisch tegenstandermodel (AC, AD, TfT) altijd dezelfde geschiedenis genereren. Bij T=0.7 ontstaat realistische variatie in de antwoorden per ronde.
+We draaien elk experiment onder **twee temperatuurcondities**:
+
+| Conditie | Temperatuur | Rondes (iteratief) | Rondes (Beauty Contest) | Doel |
+|----------|-------------|-------------------|------------------------|------|
+| T=0 | 0 (deterministisch) | 1 | 1 | Meet de standaardkeuze van het LLM zonder stochastische variatie |
+| T=1 | 1 (maximaal variabel) | 10 | 20 | Meet aanpassing aan de tegenstander en variatie over rondes heen |
+
+Bij T=0 geeft het LLM bij elke call hetzelfde antwoord; bijbijgevolg voegen extra rondes geen informatie toe en volstaat 1 ronde. Bij T=1 kan het LLM zijn strategie aanpassen op basis van de spelgeschiedenis en ontstaat de variatie die nodig is om gedragspatronen te bestuderen.
 
 ### Geheugen
 Voor elke iteratieve ronde wordt de volledige speelgeschiedenis (alle voorgaande rondes met acties en payoffs) in de prompt geïnjecteerd. Het LLM kan dus patronen herkennen in het gedrag van de tegenstander.
