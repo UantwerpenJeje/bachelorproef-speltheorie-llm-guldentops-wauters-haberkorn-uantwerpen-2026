@@ -14,16 +14,16 @@ Deze code voert geautomatiseerde experimenten uit waarin verschillende Large Lan
 
 ### Onderzochte spellen
 
-**Iteratief** (LLM vs vaste strategie — `run_experiment.py`)
+**Iteratief** (LLM vs vaste strategie — `scripts/run_experiment.py`)
 - **Prisoner's Dilemma** (1 ronde bij T=0 / 10 rondes bij T=1)
 - **Chicken Game** (1 ronde bij T=0 / 10 rondes bij T=1)
 - **Stag Hunt** (1 ronde bij T=0 / 10 rondes bij T=1)
 
-**Eenmalig / one-shot** (`run_oneshot.py`)
-- **Dictator Game** — LLM verdeelt 100€; Nash = 0€, mensen ≈ 28€ (1 call per run, beide temperaturen)
+**Eenmalig / one-shot** (`scripts/run_oneshot.py`)
+- **Dictator Game** — LLM verdeelt 100€; Nash = 0€, mensen ≈ 28€ (1 ronde per run, beide temperaturen)
 - **Beauty Contest** — kies een getal 0–100; winnaar = dichtst bij 2/3 × gemiddelde; Nash = 0 (1 ronde bij T=0 / 20 rondes bij T=1)
 
-**LLM vs LLM** (`run_llm_vs_llm.py`)
+**LLM vs LLM** (`scripts/run_llm_vs_llm.py`)
 - Alle iteratieve spellen, maar de tegenstander is een tweede LLM in plaats van een vaste strategie
 
 ### Onderzochte modellen
@@ -64,32 +64,38 @@ De y-as "Cooperation Rate" in alle grafieken betekent dus: het percentage keer d
 
 ```
 .
-├── README.md                  ← dit bestand
-├── requirements.txt           ← Python-dependencies
+├── README.md
+├── .gitignore
 ├── .env.example               ← model voor API-sleutels
-├── .gitignore                 ← bestanden die niet gepushed worden (incl. .env!)
-├── config.py                  ← centrale configuratie (modellen, runs, etc.)
-├── llm_client.py              ← uniforme wrapper rond alle LLM-API's (LiteLLM)
-├── strategies.py              ← AC, AD, TfT, Random
-├── prompts.py                 ← prompt-templates per spel × framing + parse-functies
 ├── games/
-│   ├── prisoners_dilemma.py   ← payoff-matrix (iteratief)
-│   ├── chicken_game.py        ← payoff-matrix (iteratief)
-│   ├── stag_hunt.py           ← payoff-matrix (iteratief)
-│   ├── dictator_game.py       ← payoff-functie (one-shot)
-│   └── beauty_contest.py      ← hulpfuncties (iteratief met feedback)
-├── run_experiment.py          ← LLM vs vaste strategie (iteratief)
-├── run_llm_vs_llm.py          ← LLM vs LLM (iteratief)
-├── run_oneshot.py             ← Dictator, Beauty Contest
-└── results/                   ← gegenereerde CSV-bestanden
+│   ├── __init__.py             ← package initializer
+│   ├── prisoners_dilemma.py    ← payoff-matrix
+│   ├── chicken_game.py         ← payoff-matrix
+│   ├── stag_hunt.py            ← payoff-matrix
+│   ├── dictator_game.py        ← payoff-functie (one-shot)
+│   └── beauty_contest.py       ← hulpfuncties (iteratief met feedback)
+├── scripts/
+│   ├── run_experiment.py       ← LLM vs vaste strategie (iteratief)
+│   ├── run_llm_vs_llm.py      ← LLM vs LLM (iteratief)
+│   ├── run_oneshot.py          ← Dictator, Beauty Contest
+│   └── analyze_results.py      ← analyse en grafieken genereren
+├── config_files/
+│   ├── config.py               ← centrale configuratie (modellen, runs, etc.)
+│   ├── llm_client.py           ← uniforme wrapper rond alle LLM-API's (LiteLLM)
+│   ├── prompts.py              ← prompt-templates per spel × framing
+│   ├── strategies.py           ← AC, AD, TfT, Random
+│   └── requirements.txt        ← Python-dependencies
+└── results/
+    ├── *.csv                   ← ruwe resultaten
+    └── *.png                   ← gegenereerde grafieken
 ```
 
 ## Installatie
 
 ### 1. Clone de repository
 ```bash
-git clone https://github.com/<jouw-username>/<repo-naam>.git
-cd <repo-naam>
+git clone https://github.com/UantwerpenJeje/bachelorproef-speltheorie-llm-guldentops-wauters-haberkorn-uantwerpen-2026.git
+cd bachelorproef-speltheorie-llm-guldentops-wauters-haberkorn-uantwerpen-2026
 ```
 
 ### 2. Maak een virtual environment aan
@@ -101,7 +107,7 @@ venv\Scripts\activate       # Windows
 
 ### 3. Installeer dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r config_files/requirements.txt
 ```
 
 ### 4. Configureer API-sleutels
@@ -117,12 +123,12 @@ cp .env.example .env
 
 ### Dry-run (geen API-calls, om de pipeline te testen)
 ```bash
-python run_experiment.py --dry-run
+python scripts/run_experiment.py --dry-run
 ```
 
 ### Een klein experiment (voor een eerste test)
 ```bash
-python run_experiment.py \
+python scripts/run_experiment.py \
     --models gpt-4o-mini \
     --games prisoners_dilemma \
     --strategies AC AD \
@@ -132,36 +138,36 @@ python run_experiment.py \
 
 ### Het volledige iteratieve experiment
 ```bash
-python run_experiment.py
+python scripts/run_experiment.py
 ```
 Dit voert ~1 584 LLM-calls uit (T=0: 6×3×4×2×1×1 = 144; T=1: 6×3×4×2×1×10 = 1 440).
 
 ### LLM vs LLM (iteratief)
 ```bash
 # Één specifiek paar (bv. VS vs China)
-python run_llm_vs_llm.py --player1 gpt-4o-mini --player2 deepseek-chat
+python scripts/run_llm_vs_llm.py --player1 gpt-4o-mini --player2 deepseek-chat
 
 # Alle paren uit een lijst van modellen
-python run_llm_vs_llm.py --models gpt-4o-mini deepseek-chat claude-haiku
+python scripts/run_llm_vs_llm.py --models gpt-4o-mini deepseek-chat claude-haiku
 
 # Dry-run
-python run_llm_vs_llm.py --player1 gpt-4o-mini --player2 deepseek-chat --dry-run
+python scripts/run_llm_vs_llm.py --player1 gpt-4o-mini --player2 deepseek-chat --dry-run
 ```
 
 ### One-shot spellen (Dictator, Beauty Contest)
 ```bash
 # Beide one-shot spellen
-python run_oneshot.py --models gpt-4o-mini deepseek-chat
+python scripts/run_oneshot.py --models gpt-4o-mini deepseek-chat
 
 # Enkel het Dictator Game
-python run_oneshot.py --models gpt-4o-mini --games dictator_game
+python scripts/run_oneshot.py --models gpt-4o-mini --games dictator_game
 
 # Beauty Contest met meer spelers en meer rondes
-python run_oneshot.py --models gpt-4o-mini --games beauty_contest \
+python scripts/run_oneshot.py --models gpt-4o-mini --games beauty_contest \
     --num-players 7 --num-rounds 8
 
 # Dry-run (geen API-calls)
-python run_oneshot.py --models gpt-4o-mini --dry-run
+python scripts/run_oneshot.py --models gpt-4o-mini --dry-run
 ```
 
 ### Output
@@ -173,7 +179,7 @@ results/results_oneshot_dictator_YYYYMMDD_HHMMSS.csv
 results/results_oneshot_beauty_YYYYMMDD_HHMMSS.csv
 ```
 
-**Kolommen — iteratief (`run_experiment.py`):**
+**Kolommen — iteratief (`scripts/run_experiment.py`):**
 | kolom | omschrijving |
 |-------|--------------|
 | `model` | naam van het LLM |
@@ -189,7 +195,7 @@ results/results_oneshot_beauty_YYYYMMDD_HHMMSS.csv
 | `raw_response` | de volledige tekst van het LLM (voor debugging) |
 | `temperature` | gebruikte temperatuur (0.7) |
 
-Extra kolommen in `run_llm_vs_llm.py`: `opponent_model`, `perspective` (player1/player2).
+Extra kolommen in `scripts/run_llm_vs_llm.py`: `opponent_model`, `perspective` (player1/player2).
 
 **Kolommen — Dictator Game:**
 `model`, `game`, `framing`, `run_id`, `amount_shared`, `amount_kept`, `payoff_dictator`, `payoff_receiver`, `raw_response`, `temperature`
@@ -199,7 +205,7 @@ Extra kolommen in `run_llm_vs_llm.py`: `opponent_model`, `perspective` (player1/
 
 ## Resultaten en grafieken
 
-Voer `python analyze_results.py` uit om alle analyses en grafieken te genereren. Alle PNG-bestanden worden opgeslagen in `results/`.
+Voer `python scripts/analyze_results.py` uit om alle analyses en grafieken te genereren. Alle PNG-bestanden worden opgeslagen in `results/`.
 
 ### plot1_coop_per_game.png — Coöperatie-rate per model per spel
 Toont het percentage C-keuzes per model, gemiddeld over **alle** tegenstanders (AC, AD, TfT, Random) én beide framings (neutral + competitive) én beide temperaturen (T=0 en T=1).
