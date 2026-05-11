@@ -14,7 +14,7 @@ import seaborn as sns
 
 warnings.filterwarnings('ignore')
 
-RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
+RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results')
 
 # ── Reference values ──────────────────────────────────────────────────────────
 HUMAN_COOP = {

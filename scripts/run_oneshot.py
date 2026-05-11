@@ -32,6 +32,10 @@ from itertools import product
 
 from tqdm import tqdm
 
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PROJECT_ROOT)
+sys.path.insert(0, os.path.join(_PROJECT_ROOT, 'config_files'))
+
 import config
 from llm_client import call_llm
 from prompts import (

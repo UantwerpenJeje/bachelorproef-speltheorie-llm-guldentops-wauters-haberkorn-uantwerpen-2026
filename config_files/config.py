@@ -5,6 +5,8 @@ Centrale configuratie van het experiment.
 Alle constanten staan hier zodat we ze niet hoeven te zoeken in de code.
 """
 
+import os
+
 # ---------------------------------------------------------------------------
 # LLM-modellen
 # ---------------------------------------------------------------------------
@@ -62,5 +64,5 @@ FRAMINGS = ["neutral", "competitive"]
 # ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
-RESULTS_DIR = "results"
+RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results')
 RANDOM_SEED = 42  # voor reproduceerbaarheid van de Random-strategie
