@@ -42,6 +42,20 @@ Deze code voert geautomatiseerde experimenten uit waarin verschillende Large Lan
 - **TfT** – Tit-for-Tat
 - **Random** – willekeurige keuze (50/50)
 
+### Actielabels per spel
+
+In de code gebruiken we universeel `C` en `D` als actielabels zodat strategieën zoals Tit-for-Tat herbruikbaar zijn over alle spellen heen. Maar C/D betekent per spel iets anders:
+
+| Spel | C (cooperate) | D (defect) | Waarom deze mapping? |
+|------|--------------|------------|---------------------|
+| Prisoner's Dilemma | Zwijgen (samenwerken) | Verraden | Klassiek: C = coöperatie, D = verraad |
+| Chicken Game | Stoppen (veilig) | Doorrijden (agressief) | C = toegeven, D = escaleren |
+| Stag Hunt | Hert jagen (risicovol maar belonend) | Haas jagen (veilig) | C = risicovolle samenwerking, D = veilige solo-keuze. Let op: "defect" is hier GEEN verraad maar de veilige optie |
+
+> **Belangrijk voor Stag Hunt:** "Cooperation Rate" is hier het percentage dat Hert kiest (de risicovolle maar potentieel meer belonende keuze). "Defect" is het percentage dat voor Haas kiest (de veilige keuze). Dit is een wezenlijk verschil met het Prisoner's Dilemma, waar D echt verraad inhoudt.
+
+De y-as "Cooperation Rate" in alle grafieken betekent dus: het percentage keer dat het model C kiest — wat per spel verschilt in betekenis.
+
 ### Framings
 - **neutral** – spel wordt beschreven zonder geladen termen, acties zijn `A` / `B`
 - **competitive** – expliciete nadruk op winnen en eigen scoremaximalisatie
@@ -188,28 +202,62 @@ Extra kolommen in `run_llm_vs_llm.py`: `opponent_model`, `perspective` (player1/
 Voer `python analyze_results.py` uit om alle analyses en grafieken te genereren. Alle PNG-bestanden worden opgeslagen in `results/`.
 
 ### plot1_coop_per_game.png — Coöperatie-rate per model per spel
-Toont het percentage rondes waarin elk LLM de coöperatieve actie kiest, gemiddeld over alle tegenstanders en framings. De rode stippellijn is het Nash-evenwicht, de groene stippellijn het menselijk gemiddelde. Hoe hoger de balk, hoe coöperatiever het model.
+Toont het percentage C-keuzes per model, gemiddeld over **alle** tegenstanders (AC, AD, TfT, Random) én beide framings (neutral + competitive) én beide temperaturen (T=0 en T=1).
 
-### plot2_coop_temperature.png — Temperatuurvergelijking T=0 vs T=1
-Vergelijkt de coöperatie-rate bij T=0 (deterministisch, 1 ronde) en T=1 (variabel, 10 rondes) per model per spel. Blauwe balken zijn T=0, oranje balken T=1. Een groot verschil tussen T=0 en T=1 betekent dat temperatuur het gedrag sterk beïnvloedt.
+Dit gemiddelde maskeert mogelijk grote verschillen: een model dat 100% C speelt tegen AC en 0% tegen AD scoort gemiddeld 50%, net als een model dat altijd 50% C speelt. Zie plot7 voor de uitsplitsing per tegenstander.
+
+- **Error bars** = standaarddeviatie over alle condities (tegenstander × framing × temperatuur), niet over meerdere runs. Ze tonen de spreiding van gedrag *tussen* condities, niet de onzekerheid van een schatting.
+- **Referentielijnen:** rood = Nash-evenwicht (rationele voorspelling), groen = menselijk gemiddelde uit de literatuur.
+- **Prisoner's Dilemma:** Nash = 0% coöperatie (altijd verraden); menselijk gemiddelde = 68%.
+- **Chicken Game:** Nash mixed ≈ 50% stoppen; menselijk gemiddelde = 50%.
+- **Stag Hunt:** twee Nash-evenwichten — (C,C) = beide Hert (rode stippellijn boven) en (D,D) = beide Haas (rode stippellijn onder); menselijk gemiddelde = 60% Hert.
+
+### plot2_coop_temperature.png — T=0 vs T=1 vergelijking
+Vergelijkt de coöperatie-rate bij T=0 (blauw) en T=1 (oranje) per model per spel.
+
+> **Belangrijk:** T=0 en T=1 zijn niet direct vergelijkbaar. Bij T=0 is er slechts 1 ronde (deterministisch; het model geeft altijd hetzelfde antwoord). Bij T=1 zijn er 10 rondes met geheugen (iteratief; het model kan leren van vorige rondes). Een verschil tussen beide balken kan komen door: (a) de temperatuurinstelling zelf (meer willekeur), (b) het iteratieve karakter (leren van de tegenstander), of (c) beide. Deze effecten zijn in dit experiment niet los te trekken.
+
+Error bars bij T=1 tonen de standaarddeviatie over de condities (tegenstander × framing).
 
 ### plot3_beauty_contest.png — Beauty Contest: gekozen getal per ronde
-Links (T=0): barplot van het gekozen getal per model in de enkele ronde. Rechts (T=1): lijnplot van het gemiddeld gekozen getal per ronde over 20 rondes. De stippellijnen tonen level-k denkniveaus (level 0 = 50, level 1 = 33, level 2 = 22, Nash = 0) en het menselijk gemiddelde (36). Convergentie naar 0 over de rondes wijst op strategisch leren.
+> **Belangrijke context:** het LLM speelt *niet* tegen andere rationele spelers, maar tegen gesimuleerde random spelers die elke ronde een willekeurig getal kiezen (uniform 0–100). Het verwachte gemiddelde van deze spelers is ≈ 50. Daardoor is het optimale antwoord *niet* 0 (het Nash-evenwicht), maar ≈ 33 (= 2/3 × 50). Het Nash-evenwicht van 0 geldt alleen als *alle* spelers rationeel redeneren, wat hier niet het geval is.
+
+- **Links (T=0):** barplot van het gekozen getal per model in de enkele deterministisch ronde. 4 van 6 modellen kiezen 33 — exact level-1-redenering (optimaal tegen random spelers). Llama kiest 46,5 (bijna level-0, nauwelijks strategisch). Grok kiest 10 (overmatig strategisch, suboptimaal tegen random spelers).
+- **Rechts (T=1):** lijnplot van het gemiddeld gekozen getal per ronde over 20 rondes. De meeste modellen fluctueren tussen 15 en 40, zonder duidelijke convergentie naar 0 — wat rationeel is, want tegen random spelers is convergeren naar 0 niet optimaal.
+- **Referentielijnen:** Level 0 = 50 (geen strategisch denken), Level 1 ≈ 33 (één stap: 2/3 × 50), Level 2 ≈ 22 (twee stappen: (2/3)² × 50), Nash = 0 (oneindig iteratief redeneren), menselijk gemiddelde ronde 1 = 36.
 
 ### plot4_dictator_game.png — Dictator Game: gemiddeld afgestaan bedrag
-Barplot van hoeveel elk model weggeeft van de 100 euro. Nash-evenwicht is 0 euro (rode lijn), menselijk gemiddelde is 28 euro (groene lijn). Modellen die boven de groene lijn zitten zijn genereuzer dan mensen.
+Barplot van hoeveel elk model weggeeft van de 100 euro, gemiddeld over beide framings. Nash-evenwicht = 0 euro (rode lijn): een rationele egoist houdt alles. Menselijk gemiddelde = 28 euro (groene lijn).
+
+Opvallend: bij T=0 geeft GPT-4o-mini 75 euro weg — bijna drie keer zoveel als het menselijk gemiddelde. Alle andere modellen geven 25 euro. Bij T=1 normaliseren alle modellen naar 25 euro (inclusief GPT-4o-mini). De hoge waarde van GPT-4o-mini bij T=0 is mogelijk een artefact van de deterministische decoding. Alle modellen zitten dicht bij het menselijk gemiddelde van 28 euro en ver van het rationele Nash-evenwicht van 0.
 
 ### plot5_framing_effect.png — Framing-effect: neutral vs competitive
-Toont het verschil in coöperatie-rate tussen neutrale en competitieve framing per model per spel. Groene balken = hogere coöperatie bij neutrale framing. Rode balken = hogere coöperatie bij competitieve framing. Een grote balk betekent dat het model gevoelig is voor hoe de situatie wordt beschreven.
+Toont het *verschil* in coöperatie-rate: (neutraal) minus (competitief).
+
+- **Positieve waarde (groene balk):** het model coöpereert meer bij neutrale framing.
+- **Negatieve waarde (rode balk):** het model coöpereert meer bij competitieve framing.
+
+Claude Haiku en GPT-4o-mini zijn het meest framing-gevoelig bij Prisoner's Dilemma en Chicken Game (Δ > 0,6): zij wisselen dramatisch van strategie afhankelijk van hoe de vraag wordt gesteld. Gemini Flash is ook sterk framing-gevoelig bij Chicken Game (Δ > 0,8). DeepSeek is het minst framing-gevoelig over alle spellen heen. Bij Stag Hunt zijn Llama en Grok de enige modellen met een negatief framing-effect (rode balken): zij coöpereren meer bij competitieve framing, wat contra-intuïtief is.
 
 ### plot6_llmvsllm_heatmaps.png — LLM vs LLM coöperatie-heatmaps
-Heatmaps per spel en temperatuur. Rijen = het model, kolommen = de tegenstander. De kleur toont de coöperatie-rate: donkergroen = altijd coöpereren, donkerrood = altijd defecteren. Bij T=0 is het altijd 0 of 1 omdat er maar 1 ronde is.
+Elke cel toont de coöperatie-rate (percentage C-keuzes) van het model in de **rij** wanneer het speelt tegen het model in de **kolom**.
+
+- **Bovenste rij (T=0):** slechts 1 ronde, dus waarden zijn binair (0,00 = D gekozen, 1,00 = C gekozen). Dit toont de "standaardkeuze" van elk model ongeacht de tegenstander.
+- **Onderste rij (T=1):** gemiddelde over 10 rondes met geheugen. Hier kan het model zich aanpassen aan de tegenstander; waarden tussen 0 en 1 tonen hoe vaak het model coöpereert over die 10 rondes.
+- **Kleurschaal:** donkergroen = altijd coöpereren (1,0), donkerrood = altijd defecteren (0,0), geel = gemengd (≈ 0,5).
+- De diagonaal (model vs zichzelf) is gevuld — het model speelt tegen een tweede instantie van zichzelf.
 
 ### plot7_coop_per_opponent.png — Coöperatie-rate per tegenstander-strategie
-Gegroepeerde barplot per spel met de tegenstander (AC, AD, TfT, Random) op de x-as en een balk per model. Toont of LLM's hun gedrag aanpassen aan de strategie van de tegenstander. Een model dat meer coöpereert tegen AC dan tegen AD past zich aan.
+Toont per tegenstander (AC, AD, TfT, Random) hoe vaak elk model C kiest, gemiddeld over framings en temperaturen.
+
+Wat we verwachten van een "slim" model: meer C tegen AC (de tegenstander coöpereert altijd, dus samenwerking is veilig), minder C tegen AD (de tegenstander defecteert altijd, dus coöperatie wordt uitgebuit). Een model dat even vaak C speelt tegen AC als tegen AD past zich niet aan.
+
+Bij Stag Hunt zijn de patronen anders: tegen AC (= Always Stag) is C optimaal, tegen AD (= Always Hare) is D optimaal. Sommige modellen — zoals Claude Haiku en Gemini Flash — bereiken 100% C tegen AC bij Stag Hunt, wat optimaal is.
 
 ### plot8_payoff_evolution.png — Payoff-evolutie over rondes (T=1)
-Lijnplot van de gemiddelde payoff per ronde per model per spel, alleen bij T=1. Toont of modellen leren en betere resultaten behalen naarmate het spel vordert. Een stijgende lijn wijst op leergedrag.
+Lijnplot van de gemiddelde payoff per ronde, alleen bij T=1 (10 rondes met geheugen). Het gemiddelde is over alle tegenstanders (AC, AD, TfT, Random) én beide framings. Dit verklaart de hoge volatiliteit: de ene tegenstander levert hoge payoffs (AC), de andere lage (AD), en het gemiddelde fluctueert sterk.
+
+Er is slechts 1 run per conditie, dus elk datapunt is gebaseerd op 1 enkele ronde tegen 1 tegenstander — er is geen statistische smoothing. Een stijgende trend zou wijzen op leergedrag; in de praktijk is er geen duidelijke trend zichtbaar, wat suggereert dat de modellen niet systematisch leren over de rondes.
 
 ## Methodologische keuzes
 
@@ -232,6 +280,13 @@ Voor elke iteratieve ronde wordt de volledige speelgeschiedenis (alle voorgaande
 
 ### Universele actiecodering
 Intern werken we met `C` (cooperate) en `D` (defect) labels voor alle spellen, zodat strategieën zoals Tit-for-Tat herbruikbaar zijn over alle spellen heen. De vertaling naar spel-specifieke termen (Stag/Hare, Stop/Go, etc.) gebeurt in `prompts.py`.
+
+### Beperkingen van de huidige opzet
+
+- **Één run per conditie.** We kunnen geen betrouwbaarheidsintervallen of statistische tests berekenen. De resultaten tonen één enkele realisatie van het experiment, niet een verwachte waarde.
+- **"Cooperation Rate" verschilt per spel in betekenis.** Bij Prisoner's Dilemma is C = samenwerken; bij Stag Hunt is C = de risicovolle keuze (Hert). Zie de sectie "Actielabels per spel" voor de volledige vertaaltabel.
+- **Beauty Contest: random tegenstanders, geen rationele agenten.** Het Nash-evenwicht van 0 is daardoor niet het optimale antwoord in dit experiment; 33 (level-1-redenering) is dat wel.
+- **Temperatuur en iteratie zijn verweven.** T=0 heeft 1 ronde en T=1 heeft 10 rondes; gemeten verschillen kunnen zowel door de temperatuurinstelling als door het iteratieve karakter (leren van de tegenstander) komen.
 
 ## Reproduceerbaarheid
 
